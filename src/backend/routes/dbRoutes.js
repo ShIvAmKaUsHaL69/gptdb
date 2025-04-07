@@ -4,6 +4,7 @@ const schemaService = require('../services/schemaService');
 const schemaCache = require('../services/schemaCache');
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs').promises;
 
 // Configure multer for file uploads
 const upload = multer({
@@ -137,6 +138,108 @@ router.get('/schema/cache', async (req, res) => {
     res.json(schema);
   } catch (error) {
     console.error('Error loading cached schema:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Generate simplified schema format
+router.get('/schema/simplified', async (req, res) => {
+  try {
+    // First try from cache
+    let schema = await schemaCache.loadCachedSchema();
+    
+    // If no cache, build the schema
+    if (!schema) {
+      schema = await schemaService.buildSchemaContext();
+    }
+    
+    // Convert to simplified format
+    let simplifiedText = "# Simplified Database Schema\n";
+    simplifiedText += "# Format: database_name.table_name: column1(type,key), column2(type)\n";
+    simplifiedText += "# PK = Primary Key, FK = Foreign Key\n\n";
+    
+    for (const dbName in schema) {
+      simplifiedText += `# Database: ${dbName}\n`;
+      
+      for (const tableName in schema[dbName]) {
+        const columns = schema[dbName][tableName];
+        
+        // Start the table line
+        simplifiedText += `${dbName}.${tableName}: `;
+        
+        // Add columns with their types and keys
+        const columnTexts = columns.map(column => {
+          let columnText = column.Field;
+          
+          // Add type if available
+          if (column.Type) {
+            columnText += `(${column.Type}`;
+            
+            // Add key info if available
+            if (column.Key === 'PRI') {
+              columnText += ',PK';
+            } else if (column.Key === 'MUL') {
+              columnText += ',FK';
+            } else if (column.Key) {
+              columnText += `,${column.Key}`;
+            }
+            
+            columnText += ')';
+          }
+          
+          return columnText;
+        });
+        
+        // Join all column texts and end the line
+        simplifiedText += columnTexts.join(', ') + '\n';
+      }
+      
+      simplifiedText += '\n';
+    }
+    
+    // Set content type to plain text
+    res.setHeader('Content-Type', 'text/plain');
+    res.setHeader('Content-Disposition', 'attachment; filename="db_schema.txt"');
+    
+    // Send the simplified schema format
+    res.send(simplifiedText);
+  } catch (error) {
+    console.error('Error generating simplified schema:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Generate schema for specific database(s)
+router.post('/schema/generate-for-db', async (req, res) => {
+  try {
+    const { databases } = req.body;
+    
+    if (!databases || !Array.isArray(databases) || databases.length === 0) {
+      return res.status(400).json({ error: 'Please specify at least one database' });
+    }
+    
+    // Build schema for specified databases
+    const schemaContext = {};
+    
+    for (const database of databases) {
+      try {
+        const dbSchema = await schemaService.getDatabaseSchema(database, false);
+        schemaContext[database] = dbSchema;
+      } catch (error) {
+        console.error(`Error getting schema for ${database}:`, error.message);
+        // Continue with other databases
+      }
+    }
+    
+    // Save to cache file
+    await schemaCache.saveSchemaToCache(schemaContext);
+    
+    res.json({ 
+      success: true, 
+      message: `Schema cached for databases: ${databases.join(', ')}`
+    });
+  } catch (error) {
+    console.error('Error generating schema for specific databases:', error);
     res.status(500).json({ error: error.message });
   }
 });

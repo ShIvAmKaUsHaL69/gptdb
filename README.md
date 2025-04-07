@@ -66,13 +66,40 @@ npm run dev
 
 ## Usage
 
-1. Select a specific database from the dropdown menu or leave it as "All Databases" to query across all available databases
+1. Select a specific database from the dropdown menu or leave it as "Auto-detect" to query across available databases
 2. Type your question in natural language, for example:
    - "How many students were absent this month?"
    - "Show me the total sales by region for the last quarter"
    - "Which products have the highest inventory levels?"
+   - "Show me students created within 10 days in bolsta" (specifying the database name helps with detection)
 3. Press Enter or click the Send button
 4. View the results and explanation
+
+## Optimizing for Token Usage
+
+If you encounter "out of token" errors with larger databases, use one of these approaches:
+
+### 1. Cache Only Specific Databases
+
+1. Go to Schema Management page (`/schema.html`) 
+2. Under "Cache Specific Databases" section, select only the databases that you need
+3. Click "Cache Selected Databases"
+
+### 2. Create a Simplified Schema File
+
+1. On the Schema Management page, click "Download Simplified Schema"
+2. Edit the downloaded file to keep only the tables and columns you need
+3. Upload the edited file using the "Upload Schema File" section
+
+### 3. Mention the Database Name in Your Questions
+
+When asking questions, include the database name to help the system focus only on that database:
+- "How many students were absent in the **schooldb** this month?"
+- "Show me recent customers in the **customerdb**"
+
+### 4. Use Database Dropdown
+
+Select a specific database from the dropdown before asking questions to limit schema information sent to the AI.
 
 ## Security
 

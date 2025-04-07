@@ -108,6 +108,27 @@
       justify-content: center;
       gap: 15px;
     }
+    .db-tag {
+      display: inline-block;
+      background: #e9ecef;
+      color: #495057;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 0.8rem;
+      margin-left: 6px;
+    }
+    .message-metadata {
+      font-size: 0.75rem;
+      color: #6c757d;
+      margin-bottom: 3px;
+    }
+    .db-suggestions {
+      margin-top: 5px;
+    }
+    .db-suggestions .badge {
+      cursor: pointer;
+      margin-right: 3px;
+    }
   </style>
 </head>
 <body>
@@ -119,7 +140,7 @@
           <div class="d-flex align-items-center">
             <label for="databaseSelect" class="me-2">Database:</label>
             <select id="databaseSelect" class="form-select database-selector">
-              <option value="">All Databases</option>
+              <option value="">Auto-detect</option>
             </select>
           </div>
         </div>
@@ -128,7 +149,8 @@
           <div id="chatMessages" class="chat-messages">
             <div class="message bot">
               <div class="message-content">
-                Hello! I'm your Database Assistant. Ask me questions about your databases and I'll provide answers.
+                <div>Hello! I'm your Database Assistant. Ask me questions about your databases and I'll provide answers.</div>
+                <div class="db-suggestions mt-2" id="dbSuggestions"></div>
               </div>
             </div>
           </div>
@@ -161,16 +183,33 @@
       const messageInput = document.getElementById('messageInput');
       const sendButton = document.getElementById('sendButton');
       const databaseSelect = document.getElementById('databaseSelect');
+      const dbSuggestions = document.getElementById('dbSuggestions');
       
       // Fetch available databases
       fetch('/api/db/databases')
         .then(response => response.json())
         .then(databases => {
+          // Add database options to dropdown
           databases.forEach(db => {
             const option = document.createElement('option');
             option.value = db;
             option.textContent = db;
             databaseSelect.appendChild(option);
+          });
+          
+          // Add database suggestions as clickable pills
+          dbSuggestions.innerHTML = '<small class="text-muted">Try asking about: </small>';
+          databases.forEach(db => {
+            const dbName = db.replace(/_/g, ' ');
+            const badge = document.createElement('span');
+            badge.className = 'badge bg-light text-dark';
+            badge.textContent = dbName;
+            badge.addEventListener('click', () => {
+              databaseSelect.value = db;
+              messageInput.value = `Tell me about the ${dbName} database`;
+              messageInput.focus();
+            });
+            dbSuggestions.appendChild(badge);
           });
         })
         .catch(error => {
@@ -226,7 +265,9 @@
         })
         .catch(error => {
           // Remove typing indicator
-          chatMessages.removeChild(typingIndicator);
+          if (chatMessages.contains(typingIndicator)) {
+            chatMessages.removeChild(typingIndicator);
+          }
           console.error('Error:', error);
           addBotMessage('Sorry, I encountered an error while processing your request.');
         });
@@ -236,7 +277,20 @@
       function addUserMessage(text) {
         const messageDiv = document.createElement('div');
         messageDiv.className = 'message user';
-        messageDiv.innerHTML = `<div class="message-content">${text}</div>`;
+        
+        // Include database tag if one is selected
+        let dbTag = '';
+        if (databaseSelect.value) {
+          dbTag = `<span class="db-tag">${databaseSelect.value}</span>`;
+        }
+        
+        messageDiv.innerHTML = `
+          <div class="message-content">
+            <div>${text}</div>
+            ${dbTag}
+          </div>
+        `;
+        
         chatMessages.appendChild(messageDiv);
         chatMessages.scrollTop = chatMessages.scrollHeight;
       }
@@ -250,13 +304,41 @@
         chatMessages.scrollTop = chatMessages.scrollHeight;
       }
       
+      // Extract database name from SQL query
+      function extractDatabaseFromSql(sql) {
+        if (!sql) return null;
+        
+        // Try to match database name from FROM clause
+        const fromMatch = sql.match(/from\s+([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]+)/i);
+        if (fromMatch && fromMatch[1]) {
+          return fromMatch[1];
+        }
+        
+        // Try to match from USE statement
+        const useMatch = sql.match(/use\s+([a-zA-Z0-9_]+)/i);
+        if (useMatch && useMatch[1]) {
+          return useMatch[1];
+        }
+        
+        return null;
+      }
+      
       // Add full bot response with SQL and results
       function addBotResponse(data) {
         const messageDiv = document.createElement('div');
         messageDiv.className = 'message bot';
         
-        let messageContent = `<div class="message-content">
-          <div>${data.explanation}</div>`;
+        // Extract database from SQL if available
+        const detectedDb = extractDatabaseFromSql(data.sql);
+        const dbTag = detectedDb ? `<span class="db-tag">${detectedDb}</span>` : '';
+        
+        let messageContent = `
+          <div class="message-content">
+            <div class="message-metadata">
+              ${dbTag}
+            </div>
+            <div>${data.explanation}</div>
+        `;
         
         // Add SQL query if available
         if (data.sql) {
@@ -302,6 +384,15 @@
         
         chatMessages.appendChild(messageDiv);
         chatMessages.scrollTop = chatMessages.scrollHeight;
+        
+        // Auto-select the database for next query if one was detected
+        if (detectedDb && databaseSelect.value === '') {
+          const options = Array.from(databaseSelect.options);
+          const option = options.find(opt => opt.value === detectedDb);
+          if (option) {
+            databaseSelect.value = detectedDb;
+          }
+        }
       }
       
       // Event listeners

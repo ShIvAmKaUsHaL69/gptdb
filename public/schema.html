@@ -28,6 +28,9 @@
       font-family: monospace;
       margin-top: 10px;
     }
+    .db-checkbox {
+      margin-right: 10px;
+    }
   </style>
 </head>
 <body>
@@ -47,6 +50,25 @@
               <i class="bi bi-save"></i> Cache Current Schema
             </button>
             <div id="cacheStatus" class="mt-2"></div>
+          </div>
+        </div>
+        
+        <div class="card mb-4">
+          <div class="card-header bg-warning text-dark">
+            <h5 class="mb-0">Cache Specific Databases</h5>
+          </div>
+          <div class="card-body">
+            <p>Improve performance by only caching the schemas for databases you actually need.</p>
+            <div id="databaseList" class="mb-3">
+              <div class="spinner-border spinner-border-sm" role="status">
+                <span class="visually-hidden">Loading...</span>
+              </div>
+              Loading databases...
+            </div>
+            <button id="cacheSelectedBtn" class="btn btn-warning" disabled>
+              <i class="bi bi-save"></i> Cache Selected Databases
+            </button>
+            <div id="cacheSelectedStatus" class="mt-2"></div>
           </div>
         </div>
         
@@ -85,14 +107,19 @@ inventory_db.categories: id(int,PK), name(varchar)</pre>
           </div>
         </div>
         
-        <div class="card">
+        <div class="card mb-4">
           <div class="card-header bg-info text-white">
             <h5 class="mb-0">Current Cached Schema</h5>
           </div>
           <div class="card-body">
-            <button id="viewSchemaBtn" class="btn btn-info">
-              <i class="bi bi-eye"></i> View Cached Schema
-            </button>
+            <div class="d-flex gap-2">
+              <button id="viewSchemaBtn" class="btn btn-info">
+                <i class="bi bi-eye"></i> View Cached Schema
+              </button>
+              <a id="downloadSchemaBtn" href="/api/db/schema/simplified" class="btn btn-secondary" download="db_schema.txt">
+                <i class="bi bi-download"></i> Download Simplified Schema
+              </a>
+            </div>
             <div id="schemaContainer" class="schema-container d-none">
               <pre id="schemaContent"></pre>
             </div>
@@ -117,6 +144,12 @@ inventory_db.categories: id(int,PK), name(varchar)</pre>
       const viewSchemaBtn = document.getElementById('viewSchemaBtn');
       const schemaContainer = document.getElementById('schemaContainer');
       const schemaContent = document.getElementById('schemaContent');
+      const databaseList = document.getElementById('databaseList');
+      const cacheSelectedBtn = document.getElementById('cacheSelectedBtn');
+      const cacheSelectedStatus = document.getElementById('cacheSelectedStatus');
+      
+      // Load databases for the selective caching feature
+      loadDatabases();
       
       // Cache current schema
       cacheSchemaBtn.addEventListener('click', async () => {
@@ -136,6 +169,40 @@ inventory_db.categories: id(int,PK), name(varchar)</pre>
           }
         } catch (error) {
           cacheStatus.innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
+        }
+      });
+      
+      // Cache selected databases
+      cacheSelectedBtn.addEventListener('click', async () => {
+        const selectedDatabases = Array.from(document.querySelectorAll('input[name="database"]:checked'))
+          .map(checkbox => checkbox.value);
+        
+        if (selectedDatabases.length === 0) {
+          cacheSelectedStatus.innerHTML = '<div class="alert alert-warning">Please select at least one database</div>';
+          return;
+        }
+        
+        cacheSelectedStatus.innerHTML = 
+          '<div class="spinner-border spinner-border-sm text-warning" role="status"></div> Caching selected databases...';
+        
+        try {
+          const response = await fetch('/api/db/schema/generate-for-db', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ databases: selectedDatabases })
+          });
+          
+          const data = await response.json();
+          
+          if (response.ok) {
+            cacheSelectedStatus.innerHTML = '<div class="alert alert-success">Selected databases cached successfully!</div>';
+          } else {
+            cacheSelectedStatus.innerHTML = `<div class="alert alert-danger">Error: ${data.error}</div>`;
+          }
+        } catch (error) {
+          cacheSelectedStatus.innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
         }
       });
       
@@ -193,6 +260,55 @@ inventory_db.categories: id(int,PK), name(varchar)</pre>
           schemaContent.textContent = `Error: ${error.message}`;
         }
       });
+      
+      // Load available databases for selective caching
+      async function loadDatabases() {
+        try {
+          const response = await fetch('/api/db/databases');
+          
+          if (response.ok) {
+            const databases = await response.json();
+            
+            if (databases.length === 0) {
+              databaseList.innerHTML = '<div class="alert alert-info">No databases found</div>';
+              return;
+            }
+            
+            // Create checkboxes for each database
+            let html = '<div class="mb-2">Select databases to cache:</div>';
+            html += '<div class="form-check form-check-inline mb-2">';
+            html += `<input type="checkbox" class="form-check-input" id="selectAll">`;
+            html += `<label class="form-check-label" for="selectAll">Select All</label>`;
+            html += '</div><br>';
+            
+            databases.forEach(db => {
+              html += '<div class="form-check form-check-inline mb-2">';
+              html += `<input type="checkbox" class="form-check-input" name="database" value="${db}" id="db_${db}">`;
+              html += `<label class="form-check-label" for="db_${db}">${db}</label>`;
+              html += '</div>';
+            });
+            
+            databaseList.innerHTML = html;
+            
+            // Enable the cache button
+            cacheSelectedBtn.disabled = false;
+            
+            // Add select all functionality
+            const selectAllCheckbox = document.getElementById('selectAll');
+            const databaseCheckboxes = document.querySelectorAll('input[name="database"]');
+            
+            selectAllCheckbox.addEventListener('change', () => {
+              databaseCheckboxes.forEach(checkbox => {
+                checkbox.checked = selectAllCheckbox.checked;
+              });
+            });
+          } else {
+            databaseList.innerHTML = '<div class="alert alert-danger">Error loading databases</div>';
+          }
+        } catch (error) {
+          databaseList.innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
+        }
+      }
     });
   </script>
 </body>

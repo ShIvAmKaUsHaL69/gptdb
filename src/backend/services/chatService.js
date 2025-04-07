@@ -3,6 +3,40 @@ const schemaService = require('./schemaService');
 const schemaCache = require('./schemaCache');
 
 /**
+ * Detects which database a query is likely referring to
+ * @param {string} query - The natural language query
+ * @param {array} availableDatabases - List of available databases
+ * @returns {string|null} - Most likely database name or null if can't determine
+ */
+const detectDatabaseFromQuery = (query, availableDatabases) => {
+  if (!availableDatabases || availableDatabases.length === 0) {
+    return null;
+  }
+
+  // Convert query to lowercase for comparison
+  const queryLower = query.toLowerCase();
+  
+  // Check if the query directly mentions a database name
+  for (const db of availableDatabases) {
+    // Create variations of the database name to check
+    const dbVariations = [
+      db.toLowerCase(),                     // exact match
+      db.toLowerCase().replace(/_/g, ' '),  // replace underscores with spaces
+      db.toLowerCase().replace(/db$/, ''),  // remove 'db' suffix if present
+      db.toLowerCase().replace(/_db$/, '')  // remove '_db' suffix if present
+    ];
+    
+    // Check if any variation is mentioned in the query
+    if (dbVariations.some(variant => queryLower.includes(variant))) {
+      console.log(`Detected database ${db} from query`);
+      return db;
+    }
+  }
+  
+  return null;
+};
+
+/**
  * Identifies potentially relevant tables based on query keywords
  * @param {string} query - The natural language query
  * @param {object} fullSchema - The complete schema context
@@ -90,6 +124,21 @@ const identifyRelevantTables = (query, fullSchema) => {
  */
 const processNaturalLanguageQuery = async (query, database = null) => {
   try {
+    // First, get available databases
+    const allDatabases = await schemaService.getAllDatabases();
+    const userDatabases = allDatabases.filter(db => 
+      !['information_schema', 'mysql', 'performance_schema', 'sys'].includes(db)
+    );
+    
+    // If no database specified, try to detect it from the query
+    if (!database) {
+      const detectedDatabase = detectDatabaseFromQuery(query, userDatabases);
+      if (detectedDatabase) {
+        database = detectedDatabase;
+        console.log(`Automatically detected database: ${database}`);
+      }
+    }
+
     // Build schema context for the AI
     let schemaContext;
     
@@ -97,21 +146,48 @@ const processNaturalLanguageQuery = async (query, database = null) => {
     const cachedSchema = await schemaCache.loadCachedSchema();
     
     if (database) {
-      // If database is specified, get schema for just that database
+      // If database is specified or detected, get schema for just that database
       if (cachedSchema && cachedSchema[database]) {
         // Use cached schema if available
         schemaContext = { [database]: cachedSchema[database] };
+        console.log(`Using cached schema for specific database: ${database}`);
       } else {
         // Fall back to fetching from database
         const databaseSchema = await schemaService.getDatabaseSchema(database);
         schemaContext = { [database]: databaseSchema };
+        console.log(`Fetched schema for specific database: ${database}`);
       }
     } else {
       // Otherwise use cached schema if available, or build from all databases
-      schemaContext = cachedSchema || await schemaService.buildSchemaContext();
+      if (cachedSchema) {
+        schemaContext = cachedSchema;
+        console.log('Using complete cached schema');
+      } else {
+        // If no cache, check if query contains clues about possible database
+        const possibleDBs = [];
+        for (const db of userDatabases) {
+          if (query.toLowerCase().includes(db.toLowerCase().replace(/_/g, ' ')) || 
+              query.toLowerCase().includes(db.toLowerCase())) {
+            possibleDBs.push(db);
+          }
+        }
+        
+        if (possibleDBs.length > 0) {
+          // Only fetch schemas for databases that might be relevant
+          schemaContext = {};
+          for (const db of possibleDBs) {
+            schemaContext[db] = await schemaService.getDatabaseSchema(db);
+          }
+          console.log(`Selectively fetched schemas for: ${possibleDBs.join(', ')}`);
+        } else {
+          // As last resort, build complete schema
+          schemaContext = await schemaService.buildSchemaContext();
+          console.log('Built complete schema context');
+        }
+      }
     }
     
-    // Identify relevant tables to reduce token usage
+    // Further reduce schema to only relevant tables
     const relevantSchema = identifyRelevantTables(query, schemaContext);
     
     // Generate SQL from the natural language query
@@ -142,8 +218,7 @@ const processNaturalLanguageQuery = async (query, database = null) => {
         targetDatabase = databases[0];
         
         if (!targetDatabase) {
-          const allDatabases = await schemaService.getAllDatabases();
-          targetDatabase = allDatabases.find(db => !['information_schema', 'mysql', 'performance_schema', 'sys'].includes(db));
+          targetDatabase = userDatabases[0];
         }
       }
     }
