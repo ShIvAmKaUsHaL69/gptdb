@@ -10,9 +10,17 @@ const openai = new OpenAI({
 /**
  * Limits the schema context size to prevent token overflow
  * @param {object} databaseSchema - Full database schema
- * @returns {object} - Reduced schema with only essential information
+ * @param {string|null} selectedDB - Selected database to focus on (optional)
+ * @returns {object} - Schema with preserved relationships, focused on selected DB if provided
  */
-const limitSchemaContext = (databaseSchema) => {
+const limitSchemaContext = (databaseSchema, selectedDB = null) => {
+  // If a specific database is selected, only include that one with full details
+  if (selectedDB && databaseSchema[selectedDB]) {
+    // Return only the selected database with full details
+    return { [selectedDB]: databaseSchema[selectedDB] };
+  }
+  
+  // Otherwise, include all databases but check if we need to reduce size
   const reducedSchema = {};
   
   // Process each database
@@ -21,29 +29,50 @@ const limitSchemaContext = (databaseSchema) => {
     
     // Process each table in the database
     for (const tableName in databaseSchema[dbName]) {
-      // Extract only essential column information
-      const tableColumns = databaseSchema[dbName][tableName].map(col => ({
-        Field: col.Field,
-        Type: col.Type,
-        Key: col.Key
-      }));
-      
-      reducedSchema[dbName][tableName] = tableColumns;
+      // Keep all column information including relationships
+      reducedSchema[dbName][tableName] = databaseSchema[dbName][tableName].map(col => {
+        const colInfo = {
+          Field: col.Field,
+          Type: col.Type,
+          Key: col.Key
+        };
+        
+        // Preserve References/relationship information
+        if (col.References) {
+          colInfo.References = col.References;
+        }
+        
+        return colInfo;
+      });
     }
   }
   
-  // Check size and further reduce if needed
+  // Check size and further reduce if needed, but only for non-relationship fields
   const jsonSize = JSON.stringify(reducedSchema).length;
-  if (jsonSize > 20000) {
-    console.log(`Schema context still too large (${jsonSize} chars), removing column types`);
+  if (jsonSize > 50000) { // Increased threshold
+    console.log(`Schema context too large (${jsonSize} chars), optimizing large databases`);
     
-    // Further reduce by keeping only column names and keys
+    // For very large databases, consider keeping only essential columns
     for (const dbName in reducedSchema) {
-      for (const tableName in reducedSchema[dbName]) {
-        reducedSchema[dbName][tableName] = reducedSchema[dbName][tableName].map(col => ({
-          Field: col.Field,
-          Key: col.Key
-        }));
+      const tableCount = Object.keys(reducedSchema[dbName]).length;
+      
+      // If this database has many tables, we'll be more aggressive in reduction
+      if (tableCount > 15) {
+        for (const tableName in reducedSchema[dbName]) {
+          reducedSchema[dbName][tableName] = reducedSchema[dbName][tableName].map(col => {
+            const essentialCol = {
+              Field: col.Field,
+              Key: col.Key
+            };
+            
+            // Always preserve relationship information
+            if (col.References) {
+              essentialCol.References = col.References;
+            }
+            
+            return essentialCol;
+          });
+        }
       }
     }
   }
@@ -55,12 +84,15 @@ const limitSchemaContext = (databaseSchema) => {
  * Converts natural language query to SQL using ChatGPT
  * @param {string} query - The natural language query
  * @param {object} databaseSchema - Information about the database schema
+ * @param {string|null} selectedDB - Selected database to focus on (optional)
  * @returns {string} - The generated SQL query
  */
-const generateSQLFromNaturalLanguage = async (query, databaseSchema) => {
+const generateSQLFromNaturalLanguage = async (query, databaseSchema, selectedDB = null) => {
   try {
-    // Reduce schema size to prevent token limits
-    const reducedSchema = limitSchemaContext(databaseSchema);
+    // Pass the selected database to focus on if provided
+    const focusedSchema = limitSchemaContext(databaseSchema, selectedDB);
+
+    console.log(focusedSchema);
     
     // Try with GPT-4 first
     try {
@@ -72,7 +104,7 @@ const generateSQLFromNaturalLanguage = async (query, databaseSchema) => {
             content: `You are a helpful SQL query generator. Your task is to convert natural language into valid SQL queries.
             
             Here is the database schema information:
-            ${JSON.stringify(reducedSchema, null, 2)}
+            ${JSON.stringify(focusedSchema, null, 2)}
             
             Generate only the SQL query without any explanations. If the query cannot be generated or is ambiguous, explain why.`
           },
@@ -93,11 +125,11 @@ const generateSQLFromNaturalLanguage = async (query, databaseSchema) => {
         
         // Further reduce schema by keeping only table names and primary key columns
         const minimalSchema = {};
-        for (const dbName in reducedSchema) {
+        for (const dbName in focusedSchema) {
           minimalSchema[dbName] = {};
-          for (const tableName in reducedSchema[dbName]) {
+          for (const tableName in focusedSchema[dbName]) {
             // Only keep primary key columns
-            const primaryKeys = reducedSchema[dbName][tableName]
+            const primaryKeys = focusedSchema[dbName][tableName]
               .filter(col => col.Key === 'PRI')
               .map(col => col.Field);
               
@@ -106,6 +138,7 @@ const generateSQLFromNaturalLanguage = async (query, databaseSchema) => {
               : 'No primary keys';
           }
         }
+        console.log(minimalSchema);
         
         // Try with gpt-3.5-turbo which has higher token limits
         const fallbackCompletion = await openai.chat.completions.create({

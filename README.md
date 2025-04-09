@@ -85,19 +85,26 @@ If you encounter "out of token" errors with larger databases, use one of these a
 2. Under "Cache Specific Databases" section, select only the databases that you need
 3. Click "Cache Selected Databases"
 
-### 2. Create a Simplified Schema File
+### 2. Define Table Relationships 
+
+1. On the Schema Management page, go to the "Manage Relationships" tab
+2. Define relationships between tables across different databases
+3. All tables in a relationship will be preserved in the schema
+4. When a specific database is selected, the complete schema for that database (including all tables and relationships) will be used
+
+### 3. Create a Simplified Schema File
 
 1. On the Schema Management page, click "Download Simplified Schema"
 2. Edit the downloaded file to keep only the tables and columns you need
 3. Upload the edited file using the "Upload Schema File" section
 
-### 3. Mention the Database Name in Your Questions
+### 4. Mention the Database Name in Your Questions
 
 When asking questions, include the database name to help the system focus only on that database:
 - "How many students were absent in the **schooldb** this month?"
 - "Show me recent customers in the **customerdb**"
 
-### 4. Use Database Dropdown
+### 5. Use Database Dropdown
 
 Select a specific database from the dropdown before asking questions to limit schema information sent to the AI.
 

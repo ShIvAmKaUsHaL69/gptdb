@@ -31,6 +31,16 @@
     .db-checkbox {
       margin-right: 10px;
     }
+    .relationship-card {
+      margin-bottom: 0.5rem;
+      background-color: #f8f9fa;
+    }
+    .relationship-card .badge {
+      font-size: 0.75rem;
+    }
+    .nav-tabs .nav-link {
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -40,88 +50,223 @@
         <h2><i class="bi bi-database"></i> Database Schema Management</h2>
         <p class="text-muted">Manage your database schema to optimize AI performance and reduce token usage.</p>
         
-        <div class="card mb-4">
-          <div class="card-header bg-primary text-white">
-            <h5 class="mb-0">Cache Current Schema</h5>
-          </div>
-          <div class="card-body">
-            <p>This will extract the schema from all your current databases and save it to a file for faster access.</p>
-            <button id="cacheSchemaBtn" class="btn btn-primary">
-              <i class="bi bi-save"></i> Cache Current Schema
+        <ul class="nav nav-tabs mb-4" id="schemaTabs" role="tablist">
+          <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="cache-tab" data-bs-toggle="tab" data-bs-target="#cache-tab-pane" type="button" role="tab">
+              Cache Schema
             </button>
-            <div id="cacheStatus" class="mt-2"></div>
-          </div>
-        </div>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="relationships-tab" data-bs-toggle="tab" data-bs-target="#relationships-tab-pane" type="button" role="tab">
+              Manage Relationships
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="upload-tab" data-bs-toggle="tab" data-bs-target="#upload-tab-pane" type="button" role="tab">
+              Upload Schema
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="view-tab" data-bs-toggle="tab" data-bs-target="#view-tab-pane" type="button" role="tab">
+              View Schema
+            </button>
+          </li>
+        </ul>
         
-        <div class="card mb-4">
-          <div class="card-header bg-warning text-dark">
-            <h5 class="mb-0">Cache Specific Databases</h5>
-          </div>
-          <div class="card-body">
-            <p>Improve performance by only caching the schemas for databases you actually need.</p>
-            <div id="databaseList" class="mb-3">
-              <div class="spinner-border spinner-border-sm" role="status">
-                <span class="visually-hidden">Loading...</span>
+        <div class="tab-content" id="schemaTabsContent">
+          <!-- Cache Schema Tab -->
+          <div class="tab-pane fade show active" id="cache-tab-pane" role="tabpanel" tabindex="0">
+            <div class="card mb-4">
+              <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">Cache Current Schema</h5>
               </div>
-              Loading databases...
+              <div class="card-body">
+                <p>This will extract the schema from all your current databases and save it to a file for faster access.</p>
+                <button id="cacheSchemaBtn" class="btn btn-primary">
+                  <i class="bi bi-save"></i> Cache Current Schema
+                </button>
+                <div id="cacheStatus" class="mt-2"></div>
+              </div>
             </div>
-            <button id="cacheSelectedBtn" class="btn btn-warning" disabled>
-              <i class="bi bi-save"></i> Cache Selected Databases
-            </button>
-            <div id="cacheSelectedStatus" class="mt-2"></div>
-          </div>
-        </div>
-        
-        <div class="card mb-4">
-          <div class="card-header bg-success text-white">
-            <h5 class="mb-0">Upload Schema File</h5>
-          </div>
-          <div class="card-body">
-            <p>Upload a simplified schema definition file to use instead of accessing the database directly.</p>
-            <form id="uploadForm" enctype="multipart/form-data">
-              <div class="mb-3">
-                <label for="schemaFile" class="form-label">Schema File (JSON or Text Format)</label>
-                <input class="form-control" type="file" id="schemaFile" name="schemaFile" accept=".json,.txt">
-              </div>
-              <button type="submit" class="btn btn-success">
-                <i class="bi bi-upload"></i> Upload Schema
-              </button>
-            </form>
-            <div id="uploadStatus" class="mt-2"></div>
             
-            <div class="mt-3">
-              <h6>Simplified Format Example:</h6>
-              <div class="example-format">
+            <div class="card mb-4">
+              <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0">Cache Specific Databases</h5>
+              </div>
+              <div class="card-body">
+                <p>Improve performance by only caching the schemas for databases you actually need.</p>
+                <div id="databaseList" class="mb-3">
+                  <div class="spinner-border spinner-border-sm" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                  </div>
+                  Loading databases...
+                </div>
+                <button id="cacheSelectedBtn" class="btn btn-warning" disabled>
+                  <i class="bi bi-save"></i> Cache Selected Databases
+                </button>
+                <div id="cacheSelectedStatus" class="mt-2"></div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Relationships Tab -->
+          <div class="tab-pane fade" id="relationships-tab-pane" role="tabpanel" tabindex="0">
+            <div class="card mb-4">
+              <div class="card-header bg-success text-white">
+                <h5 class="mb-0">Define Table Relationships</h5>
+              </div>
+              <div class="card-body">
+                <p>Define relationships between tables even when foreign keys aren't explicitly defined in the database.</p>
+                
+                <form id="relationshipForm" class="mb-4">
+                  <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                      <label class="form-label">Source (Foreign Key Side)</label>
+                      <div class="input-group mb-2">
+                        <select id="sourceDB" class="form-select" required>
+                          <option value="">Select Database</option>
+                        </select>
+                      </div>
+                      <div class="input-group mb-2">
+                        <select id="sourceTable" class="form-select" required disabled>
+                          <option value="">Select Table</option>
+                        </select>
+                      </div>
+                      <div class="input-group">
+                        <select id="sourceColumn" class="form-select" required disabled>
+                          <option value="">Select Column</option>
+                        </select>
+                      </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                      <label class="form-label">Target (Primary Key Side)</label>
+                      <div class="input-group mb-2">
+                        <select id="targetDB" class="form-select" required>
+                          <option value="">Select Database</option>
+                        </select>
+                      </div>
+                      <div class="input-group mb-2">
+                        <select id="targetTable" class="form-select" required disabled>
+                          <option value="">Select Table</option>
+                        </select>
+                      </div>
+                      <div class="input-group">
+                        <select id="targetColumn" class="form-select" required disabled>
+                          <option value="">Select Column</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                      <label class="form-label">Relationship Type</label>
+                      <select id="relationshipType" class="form-select">
+                        <option value="MANY_TO_ONE">Many-to-One (Default)</option>
+                        <option value="ONE_TO_ONE">One-to-One</option>
+                        <option value="ONE_TO_MANY">One-to-Many</option>
+                        <option value="MANY_TO_MANY">Many-to-Many</option>
+                      </select>
+                    </div>
+                  </div>
+                  
+                  <button type="submit" class="btn btn-success">
+                    <i class="bi bi-link"></i> Add Relationship
+                  </button>
+                </form>
+                
+                <div id="relationshipStatus" class="mb-3"></div>
+                
+                <h6 class="mt-4 mb-3">Current Relationships</h6>
+                <div id="relationshipsList">
+                  <div class="text-center py-3">
+                    <div class="spinner-border spinner-border-sm" role="status">
+                      <span class="visually-hidden">Loading...</span>
+                    </div>
+                    Loading relationships...
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div class="card mb-4">
+              <div class="card-header bg-info text-white">
+                <h5 class="mb-0">Relationship Example</h5>
+              </div>
+              <div class="card-body">
+                <p>For example, to define a relationship where <code>project.user_id</code> references <code>person.id</code>:</p>
+                <div class="example-format">
+<pre># Source (Foreign Key Side)
+Database: workdiary
+Table: project
+Column: user_id
+
+# Target (Primary Key Side)
+Database: workdiary
+Table: person  
+Column: id
+
+# Relationship Type: Many-to-One (many projects can belong to one person)</pre>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Upload Schema Tab -->
+          <div class="tab-pane fade" id="upload-tab-pane" role="tabpanel" tabindex="0">
+            <div class="card mb-4">
+              <div class="card-header bg-success text-white">
+                <h5 class="mb-0">Upload Schema File</h5>
+              </div>
+              <div class="card-body">
+                <p>Upload a simplified schema definition file to use instead of accessing the database directly.</p>
+                <form id="uploadForm" enctype="multipart/form-data">
+                  <div class="mb-3">
+                    <label for="schemaFile" class="form-label">Schema File (JSON or Text Format)</label>
+                    <input class="form-control" type="file" id="schemaFile" name="schemaFile" accept=".json,.txt">
+                  </div>
+                  <button type="submit" class="btn btn-success">
+                    <i class="bi bi-upload"></i> Upload Schema
+                  </button>
+                </form>
+                <div id="uploadStatus" class="mt-2"></div>
+                
+                <div class="mt-3">
+                  <h6>Simplified Format Example:</h6>
+                  <div class="example-format">
 <pre># Format: database_name.table_name: column1(type,key), column2(type)
 # PK = Primary Key, FK = Foreign Key
+# Relationships can be defined with REF=target_db.target_table.target_column
 
-students_db.students: id(int,PK), name(varchar), email(varchar), grade_id(int,FK)
-students_db.grades: id(int,PK), grade_name(varchar), passing_score(int)
-students_db.attendance: id(int,PK), student_id(int,FK), date(date), status(varchar)
-
-# Another database
-inventory_db.products: id(int,PK), name(varchar), price(decimal), category_id(int)
-inventory_db.categories: id(int,PK), name(varchar)</pre>
+workdiary.person: id(int,PK), name(varchar), email(varchar)
+workdiary.project: id(int,PK), name(varchar), user_id(int,REF=workdiary.person.id)
+workdiary.timetable: id(int,PK), project_id(int,REF=workdiary.project.id), hours(int)</pre>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-        
-        <div class="card mb-4">
-          <div class="card-header bg-info text-white">
-            <h5 class="mb-0">Current Cached Schema</h5>
-          </div>
-          <div class="card-body">
-            <div class="d-flex gap-2">
-              <button id="viewSchemaBtn" class="btn btn-info">
-                <i class="bi bi-eye"></i> View Cached Schema
-              </button>
-              <a id="downloadSchemaBtn" href="/api/db/schema/simplified" class="btn btn-secondary" download="db_schema.txt">
-                <i class="bi bi-download"></i> Download Simplified Schema
-              </a>
-            </div>
-            <div id="schemaContainer" class="schema-container d-none">
-              <pre id="schemaContent"></pre>
+          
+          <!-- View Schema Tab -->
+          <div class="tab-pane fade" id="view-tab-pane" role="tabpanel" tabindex="0">
+            <div class="card mb-4">
+              <div class="card-header bg-info text-white">
+                <h5 class="mb-0">Current Cached Schema</h5>
+              </div>
+              <div class="card-body">
+                <div class="d-flex gap-2">
+                  <button id="viewSchemaBtn" class="btn btn-info">
+                    <i class="bi bi-eye"></i> View Cached Schema
+                  </button>
+                  <a id="downloadSchemaBtn" href="/api/db/schema/simplified" class="btn btn-secondary" download="db_schema.txt">
+                    <i class="bi bi-download"></i> Download Simplified Schema
+                  </a>
+                </div>
+                <div id="schemaContainer" class="schema-container d-none">
+                  <pre id="schemaContent"></pre>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -135,8 +280,10 @@ inventory_db.categories: id(int,PK), name(varchar)</pre>
     </div>
   </div>
   
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script>
     document.addEventListener('DOMContentLoaded', function() {
+      // Cache tab elements
       const cacheSchemaBtn = document.getElementById('cacheSchemaBtn');
       const cacheStatus = document.getElementById('cacheStatus');
       const uploadForm = document.getElementById('uploadForm');
@@ -148,7 +295,19 @@ inventory_db.categories: id(int,PK), name(varchar)</pre>
       const cacheSelectedBtn = document.getElementById('cacheSelectedBtn');
       const cacheSelectedStatus = document.getElementById('cacheSelectedStatus');
       
-      // Load databases for the selective caching feature
+      // Relationship tab elements
+      const relationshipForm = document.getElementById('relationshipForm');
+      const sourceDB = document.getElementById('sourceDB');
+      const sourceTable = document.getElementById('sourceTable');
+      const sourceColumn = document.getElementById('sourceColumn');
+      const targetDB = document.getElementById('targetDB');
+      const targetTable = document.getElementById('targetTable');
+      const targetColumn = document.getElementById('targetColumn');
+      const relationshipType = document.getElementById('relationshipType');
+      const relationshipStatus = document.getElementById('relationshipStatus');
+      const relationshipsList = document.getElementById('relationshipsList');
+      
+      // Initialize
       loadDatabases();
       
       // Cache current schema
@@ -164,6 +323,10 @@ inventory_db.categories: id(int,PK), name(varchar)</pre>
           
           if (response.ok) {
             cacheStatus.innerHTML = '<div class="alert alert-success">Schema cached successfully!</div>';
+            // Reload databases after caching
+            loadDatabases();
+            // Also reload relationships
+            loadRelationships();
           } else {
             cacheStatus.innerHTML = `<div class="alert alert-danger">Error: ${data.error}</div>`;
           }
@@ -198,6 +361,8 @@ inventory_db.categories: id(int,PK), name(varchar)</pre>
           
           if (response.ok) {
             cacheSelectedStatus.innerHTML = '<div class="alert alert-success">Selected databases cached successfully!</div>';
+            // Reload databases after caching
+            loadDatabases();
           } else {
             cacheSelectedStatus.innerHTML = `<div class="alert alert-danger">Error: ${data.error}</div>`;
           }
@@ -233,6 +398,11 @@ inventory_db.categories: id(int,PK), name(varchar)</pre>
                 Schema file processed successfully!<br>
                 Databases: ${data.databases.join(', ')}
               </div>`;
+              
+            // Reload the databases after upload
+            loadDatabases();
+            // Also reload relationships
+            loadRelationships();
           } else {
             uploadStatus.innerHTML = `<div class="alert alert-danger">Error: ${data.error}</div>`;
           }
@@ -261,7 +431,90 @@ inventory_db.categories: id(int,PK), name(varchar)</pre>
         }
       });
       
-      // Load available databases for selective caching
+      // Add relationship
+      relationshipForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        // Show loading indicator
+        relationshipStatus.innerHTML = '<div class="spinner-border spinner-border-sm text-success" role="status"></div> Adding relationship...';
+        
+        try {
+          const response = await fetch('/api/db/schema/relationships', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              sourceDB: sourceDB.value,
+              sourceTable: sourceTable.value,
+              sourceColumn: sourceColumn.value,
+              targetDB: targetDB.value,
+              targetTable: targetTable.value,
+              targetColumn: targetColumn.value,
+              relationship: relationshipType.value
+            })
+          });
+          
+          const data = await response.json();
+          
+          if (response.ok) {
+            relationshipStatus.innerHTML = '<div class="alert alert-success">Relationship added successfully!</div>';
+            
+            // Reset the form
+            relationshipForm.reset();
+            sourceTable.innerHTML = '<option value="">Select Table</option>';
+            sourceColumn.innerHTML = '<option value="">Select Column</option>';
+            targetTable.innerHTML = '<option value="">Select Table</option>';
+            targetColumn.innerHTML = '<option value="">Select Column</option>';
+            sourceTable.disabled = true;
+            sourceColumn.disabled = true;
+            targetTable.disabled = true;
+            targetColumn.disabled = true;
+            
+            // Reload relationships
+            loadRelationships();
+          } else {
+            relationshipStatus.innerHTML = `<div class="alert alert-danger">Error: ${data.error}</div>`;
+          }
+        } catch (error) {
+          relationshipStatus.innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
+        }
+      });
+      
+      // Delete relationship
+      async function deleteRelationship(sourceDB, sourceTable, sourceColumn, targetDB, targetTable, targetColumn) {
+        try {
+          const response = await fetch('/api/db/schema/relationships', {
+            method: 'DELETE',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              sourceDB,
+              sourceTable,
+              sourceColumn,
+              targetDB, 
+              targetTable,
+              targetColumn
+            })
+          });
+          
+          const data = await response.json();
+          
+          if (response.ok) {
+            relationshipStatus.innerHTML = '<div class="alert alert-success">Relationship deleted successfully!</div>';
+            
+            // Reload relationships
+            loadRelationships();
+          } else {
+            relationshipStatus.innerHTML = `<div class="alert alert-danger">Error: ${data.error}</div>`;
+          }
+        } catch (error) {
+          relationshipStatus.innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
+        }
+      }
+      
+      // Load available databases
       async function loadDatabases() {
         try {
           const response = await fetch('/api/db/databases');
@@ -269,38 +522,54 @@ inventory_db.categories: id(int,PK), name(varchar)</pre>
           if (response.ok) {
             const databases = await response.json();
             
+            // Populate database checkboxes for caching
             if (databases.length === 0) {
               databaseList.innerHTML = '<div class="alert alert-info">No databases found</div>';
-              return;
+            } else {
+              // Create checkboxes for each database
+              let html = '<div class="mb-2">Select databases to cache:</div>';
+              html += '<div class="form-check form-check-inline mb-2">';
+              html += `<input type="checkbox" class="form-check-input" id="selectAll">`;
+              html += `<label class="form-check-label" for="selectAll">Select All</label>`;
+              html += '</div><br>';
+              
+              databases.forEach(db => {
+                html += '<div class="form-check form-check-inline mb-2">';
+                html += `<input type="checkbox" class="form-check-input" name="database" value="${db}" id="db_${db}">`;
+                html += `<label class="form-check-label" for="db_${db}">${db}</label>`;
+                html += '</div>';
+              });
+              
+              databaseList.innerHTML = html;
+              
+              // Enable the cache button
+              cacheSelectedBtn.disabled = false;
+              
+              // Add select all functionality
+              const selectAllCheckbox = document.getElementById('selectAll');
+              const databaseCheckboxes = document.querySelectorAll('input[name="database"]');
+              
+              selectAllCheckbox.addEventListener('change', () => {
+                databaseCheckboxes.forEach(checkbox => {
+                  checkbox.checked = selectAllCheckbox.checked;
+                });
+              });
             }
             
-            // Create checkboxes for each database
-            let html = '<div class="mb-2">Select databases to cache:</div>';
-            html += '<div class="form-check form-check-inline mb-2">';
-            html += `<input type="checkbox" class="form-check-input" id="selectAll">`;
-            html += `<label class="form-check-label" for="selectAll">Select All</label>`;
-            html += '</div><br>';
+            // Populate database dropdowns for relationships
+            sourceDB.innerHTML = '<option value="">Select Database</option>';
+            targetDB.innerHTML = '<option value="">Select Database</option>';
             
             databases.forEach(db => {
-              html += '<div class="form-check form-check-inline mb-2">';
-              html += `<input type="checkbox" class="form-check-input" name="database" value="${db}" id="db_${db}">`;
-              html += `<label class="form-check-label" for="db_${db}">${db}</label>`;
-              html += '</div>';
-            });
-            
-            databaseList.innerHTML = html;
-            
-            // Enable the cache button
-            cacheSelectedBtn.disabled = false;
-            
-            // Add select all functionality
-            const selectAllCheckbox = document.getElementById('selectAll');
-            const databaseCheckboxes = document.querySelectorAll('input[name="database"]');
-            
-            selectAllCheckbox.addEventListener('change', () => {
-              databaseCheckboxes.forEach(checkbox => {
-                checkbox.checked = selectAllCheckbox.checked;
-              });
+              const sourceOption = document.createElement('option');
+              sourceOption.value = db;
+              sourceOption.textContent = db;
+              sourceDB.appendChild(sourceOption);
+              
+              const targetOption = document.createElement('option');
+              targetOption.value = db;
+              targetOption.textContent = db;
+              targetDB.appendChild(targetOption);
             });
           } else {
             databaseList.innerHTML = '<div class="alert alert-danger">Error loading databases</div>';
@@ -309,6 +578,210 @@ inventory_db.categories: id(int,PK), name(varchar)</pre>
           databaseList.innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
         }
       }
+      
+      // Load tables for selected database
+      async function loadTables(database, tableSelect) {
+        tableSelect.innerHTML = '<option value="">Select Table</option>';
+        tableSelect.disabled = true;
+        
+        if (!database) return;
+        
+        try {
+          // First try to get from cache for a more complete picture
+          const cacheResponse = await fetch('/api/db/schema/cache');
+          
+          if (cacheResponse.ok) {
+            const cachedSchema = await cacheResponse.json();
+            
+            if (cachedSchema && cachedSchema[database]) {
+              // Get tables from cache
+              const tables = Object.keys(cachedSchema[database]);
+              
+              if (tables.length > 0) {
+                tables.forEach(table => {
+                  const option = document.createElement('option');
+                  option.value = table;
+                  option.textContent = table;
+                  tableSelect.appendChild(option);
+                });
+                
+                tableSelect.disabled = false;
+                return; // Successfully loaded from cache
+              }
+            }
+          }
+          
+          // Fall back to API if cache doesn't have what we need
+          const response = await fetch(`/api/db/databases/${database}/tables`);
+          
+          if (response.ok) {
+            const tables = await response.json();
+            
+            tables.forEach(table => {
+              const option = document.createElement('option');
+              option.value = table;
+              option.textContent = table;
+              tableSelect.appendChild(option);
+            });
+            
+            tableSelect.disabled = false;
+          } else {
+            console.error('Error loading tables');
+          }
+        } catch (error) {
+          console.error('Error:', error);
+        }
+      }
+      
+      // Load columns for selected table
+      async function loadColumns(database, table, columnSelect) {
+        columnSelect.innerHTML = '<option value="">Select Column</option>';
+        columnSelect.disabled = true;
+        
+        if (!database || !table) return;
+        
+        try {
+          // First try to get from cache
+          const cacheResponse = await fetch('/api/db/schema/cache');
+          
+          if (cacheResponse.ok) {
+            const cachedSchema = await cacheResponse.json();
+            
+            if (cachedSchema && cachedSchema[database] && cachedSchema[database][table]) {
+              // Get columns from cache
+              const columns = cachedSchema[database][table];
+              
+              if (columns && columns.length > 0) {
+                columns.forEach(column => {
+                  const option = document.createElement('option');
+                  option.value = column.Field;
+                  let displayText = column.Field;
+                  if (column.Type) {
+                    displayText += ` (${column.Type})`;
+                  }
+                  option.textContent = displayText;
+                  columnSelect.appendChild(option);
+                });
+                
+                columnSelect.disabled = false;
+                return; // Successfully loaded from cache
+              }
+            }
+          }
+          
+          // Fall back to API if cache doesn't have what we need
+          const response = await fetch(`/api/db/databases/${database}/tables/${table}`);
+          
+          if (response.ok) {
+            const columns = await response.json();
+            
+            columns.forEach(column => {
+              const option = document.createElement('option');
+              option.value = column.Field;
+              option.textContent = `${column.Field} (${column.Type})`;
+              columnSelect.appendChild(option);
+            });
+            
+            columnSelect.disabled = false;
+          } else {
+            console.error('Error loading columns');
+          }
+        } catch (error) {
+          console.error('Error:', error);
+        }
+      }
+      
+      // Load relationships
+      async function loadRelationships() {
+        try {
+          const response = await fetch('/api/db/schema/relationships');
+          
+          if (response.ok) {
+            const relationships = await response.json();
+            
+            if (relationships.length === 0) {
+              relationshipsList.innerHTML = '<div class="alert alert-info">No relationships defined yet</div>';
+            } else {
+              let html = '';
+              
+              relationships.forEach(rel => {
+                html += `
+                  <div class="card relationship-card">
+                    <div class="card-body py-2">
+                      <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                          <span class="badge bg-secondary">${rel.type}</span>
+                          <span class="ms-2">
+                            <strong>${rel.sourceDB}.${rel.sourceTable}.${rel.sourceColumn}</strong>
+                            <i class="bi bi-arrow-right"></i>
+                            <strong>${rel.targetDB}.${rel.targetTable}.${rel.targetColumn}</strong>
+                          </span>
+                        </div>
+                        <button class="btn btn-sm btn-outline-danger delete-relationship-btn" 
+                          data-source-db="${rel.sourceDB}"
+                          data-source-table="${rel.sourceTable}"
+                          data-source-column="${rel.sourceColumn}"
+                          data-target-db="${rel.targetDB}"
+                          data-target-table="${rel.targetTable}"
+                          data-target-column="${rel.targetColumn}">
+                          <i class="bi bi-trash"></i>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                `;
+              });
+              
+              relationshipsList.innerHTML = html;
+              
+              // Add event listeners for delete buttons
+              document.querySelectorAll('.delete-relationship-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                  const sourceDB = this.getAttribute('data-source-db');
+                  const sourceTable = this.getAttribute('data-source-table');
+                  const sourceColumn = this.getAttribute('data-source-column');
+                  const targetDB = this.getAttribute('data-target-db');
+                  const targetTable = this.getAttribute('data-target-table');
+                  const targetColumn = this.getAttribute('data-target-column');
+                  
+                  deleteRelationship(sourceDB, sourceTable, sourceColumn, targetDB, targetTable, targetColumn);
+                });
+              });
+            }
+          } else {
+            relationshipsList.innerHTML = '<div class="alert alert-danger">Error loading relationships</div>';
+          }
+        } catch (error) {
+          relationshipsList.innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
+        }
+      }
+      
+      // Load tables when database is selected
+      sourceDB.addEventListener('change', function() {
+        loadTables(this.value, sourceTable);
+        sourceColumn.innerHTML = '<option value="">Select Column</option>';
+        sourceColumn.disabled = true;
+      });
+      
+      sourceTable.addEventListener('change', function() {
+        loadColumns(sourceDB.value, this.value, sourceColumn);
+      });
+      
+      targetDB.addEventListener('change', function() {
+        loadTables(this.value, targetTable);
+        targetColumn.innerHTML = '<option value="">Select Column</option>';
+        targetColumn.disabled = true;
+      });
+      
+      targetTable.addEventListener('change', function() {
+        loadColumns(targetDB.value, this.value, targetColumn);
+      });
+      
+      // Load relationships when tab is active
+      document.getElementById('relationships-tab').addEventListener('click', loadRelationships);
+      
+      // Initial load of relationships
+      setTimeout(loadRelationships, 1000);
     });
   </script>
 </body>

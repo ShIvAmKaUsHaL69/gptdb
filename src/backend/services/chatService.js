@@ -191,7 +191,11 @@ const processNaturalLanguageQuery = async (query, database = null) => {
     const relevantSchema = identifyRelevantTables(query, schemaContext);
     
     // Generate SQL from the natural language query
-    const sqlQuery = await openaiService.generateSQLFromNaturalLanguage(query, relevantSchema);
+    const sqlQuery = await openaiService.generateSQLFromNaturalLanguage(
+      query, 
+      schemaContext, // Pass the full schema instead of the reduced one
+      database // Pass the selected database to focus on
+    );
     
     // Check if the response is an error message
     if (!sqlQuery.toLowerCase().startsWith('select') && 

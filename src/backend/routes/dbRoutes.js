@@ -142,6 +142,202 @@ router.get('/schema/cache', async (req, res) => {
   }
 });
 
+// Add relationship between tables
+router.post('/schema/relationships', async (req, res) => {
+  try {
+    const { sourceDB, sourceTable, sourceColumn, targetDB, targetTable, targetColumn, relationship } = req.body;
+    
+    // Validate required fields
+    if (!sourceDB || !sourceTable || !sourceColumn || !targetDB || !targetTable || !targetColumn) {
+      return res.status(400).json({ error: 'Missing required relationship information' });
+    }
+    
+    // Load current cached schema
+    let schema = await schemaCache.loadCachedSchema();
+    
+    if (!schema) {
+      // If no cache exists, create a new schema
+      schema = {};
+    }
+    
+    // Ensure database and table objects exist
+    schema[sourceDB] = schema[sourceDB] || {};
+    schema[sourceDB][sourceTable] = schema[sourceDB][sourceTable] || [];
+    
+    // Find or create the source column
+    let sourceColumnObj = null;
+    if (Array.isArray(schema[sourceDB][sourceTable])) {
+      sourceColumnObj = schema[sourceDB][sourceTable].find(col => col.Field === sourceColumn);
+    }
+    
+    if (!sourceColumnObj) {
+      // If we can't find the column, try fetching from database
+      try {
+        const dbSchema = await schemaService.getDatabaseSchema(sourceDB);
+        if (dbSchema[sourceTable]) {
+          schema[sourceDB][sourceTable] = dbSchema[sourceTable];
+          sourceColumnObj = schema[sourceDB][sourceTable].find(col => col.Field === sourceColumn);
+        }
+      } catch (error) {
+        console.error(`Error fetching schema for ${sourceDB}.${sourceTable}:`, error.message);
+      }
+      
+      // If still not found, add a basic column definition
+      if (!sourceColumnObj) {
+        sourceColumnObj = { Field: sourceColumn };
+        schema[sourceDB][sourceTable].push(sourceColumnObj);
+      }
+    }
+    
+    // Add relationship information to the column
+    sourceColumnObj.References = sourceColumnObj.References || [];
+    
+    // Check if this relationship already exists
+    const existingRelIndex = sourceColumnObj.References.findIndex(ref => 
+      ref.database === targetDB && ref.table === targetTable && ref.column === targetColumn
+    );
+    
+    if (existingRelIndex >= 0) {
+      // Update existing relationship
+      sourceColumnObj.References[existingRelIndex] = {
+        database: targetDB,
+        table: targetTable,
+        column: targetColumn,
+        type: relationship || 'MANY_TO_ONE' // Default relationship type
+      };
+    } else {
+      // Add new relationship
+      sourceColumnObj.References.push({
+        database: targetDB,
+        table: targetTable,
+        column: targetColumn,
+        type: relationship || 'MANY_TO_ONE' // Default relationship type
+      });
+    }
+    
+    // Ensure target table exists in schema (this fixes the issue when tables don't appear in schema)
+    schema[targetDB] = schema[targetDB] || {};
+    if (!schema[targetDB][targetTable]) {
+      try {
+        // Try to fetch the target table schema
+        const targetDbSchema = await schemaService.getDatabaseSchema(targetDB);
+        if (targetDbSchema && targetDbSchema[targetTable]) {
+          schema[targetDB][targetTable] = targetDbSchema[targetTable];
+        } else {
+          // Create a minimal table structure with the target column
+          schema[targetDB][targetTable] = [{ Field: targetColumn }];
+        }
+      } catch (error) {
+        console.error(`Error fetching schema for ${targetDB}.${targetTable}:`, error.message);
+        // Create a minimal table structure if fetch fails
+        schema[targetDB][targetTable] = [{ Field: targetColumn }];
+      }
+    }
+    
+    // Save updated schema to cache
+    await schemaCache.saveSchemaToCache(schema);
+    
+    res.json({ 
+      success: true, 
+      message: `Relationship added: ${sourceDB}.${sourceTable}.${sourceColumn} -> ${targetDB}.${targetTable}.${targetColumn}`
+    });
+  } catch (error) {
+    console.error('Error adding relationship:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get all relationships in the schema
+router.get('/schema/relationships', async (req, res) => {
+  try {
+    const schema = await schemaCache.loadCachedSchema();
+    
+    if (!schema) {
+      return res.status(404).json({ error: 'No cached schema found' });
+    }
+    
+    // Extract all relationships from the schema
+    const relationships = [];
+    
+    for (const dbName in schema) {
+      for (const tableName in schema[dbName]) {
+        for (const column of schema[dbName][tableName]) {
+          if (column.References && column.References.length > 0) {
+            column.References.forEach(ref => {
+              relationships.push({
+                sourceDB: dbName,
+                sourceTable: tableName,
+                sourceColumn: column.Field,
+                targetDB: ref.database,
+                targetTable: ref.table,
+                targetColumn: ref.column,
+                type: ref.type
+              });
+            });
+          }
+        }
+      }
+    }
+    
+    res.json(relationships);
+  } catch (error) {
+    console.error('Error getting relationships:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete a relationship
+router.delete('/schema/relationships', async (req, res) => {
+  try {
+    const { sourceDB, sourceTable, sourceColumn, targetDB, targetTable, targetColumn } = req.body;
+    
+    // Validate required fields
+    if (!sourceDB || !sourceTable || !sourceColumn || !targetDB || !targetTable || !targetColumn) {
+      return res.status(400).json({ error: 'Missing required relationship information' });
+    }
+    
+    // Load current cached schema
+    const schema = await schemaCache.loadCachedSchema();
+    
+    if (!schema || !schema[sourceDB] || !schema[sourceDB][sourceTable]) {
+      return res.status(404).json({ error: 'Source table not found in schema' });
+    }
+    
+    // Find source column
+    const sourceColumnObj = schema[sourceDB][sourceTable].find(col => col.Field === sourceColumn);
+    
+    if (!sourceColumnObj || !sourceColumnObj.References) {
+      return res.status(404).json({ error: 'Source column or relationships not found' });
+    }
+    
+    // Remove the relationship
+    const initialLength = sourceColumnObj.References.length;
+    sourceColumnObj.References = sourceColumnObj.References.filter(ref => 
+      !(ref.database === targetDB && ref.table === targetTable && ref.column === targetColumn)
+    );
+    
+    if (sourceColumnObj.References.length === initialLength) {
+      return res.status(404).json({ error: 'Relationship not found' });
+    }
+    
+    // If no relationships left, remove the References array
+    if (sourceColumnObj.References.length === 0) {
+      delete sourceColumnObj.References;
+    }
+    
+    // Save updated schema to cache
+    await schemaCache.saveSchemaToCache(schema);
+    
+    res.json({ 
+      success: true, 
+      message: `Relationship deleted: ${sourceDB}.${sourceTable}.${sourceColumn} -> ${targetDB}.${targetTable}.${targetColumn}`
+    });
+  } catch (error) {
+    console.error('Error deleting relationship:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Generate simplified schema format
 router.get('/schema/simplified', async (req, res) => {
   try {
@@ -156,7 +352,8 @@ router.get('/schema/simplified', async (req, res) => {
     // Convert to simplified format
     let simplifiedText = "# Simplified Database Schema\n";
     simplifiedText += "# Format: database_name.table_name: column1(type,key), column2(type)\n";
-    simplifiedText += "# PK = Primary Key, FK = Foreign Key\n\n";
+    simplifiedText += "# PK = Primary Key, FK = Foreign Key\n";
+    simplifiedText += "# Relationships can be defined with REF=target_db.target_table.target_column\n\n";
     
     for (const dbName in schema) {
       simplifiedText += `# Database: ${dbName}\n`;
@@ -171,20 +368,30 @@ router.get('/schema/simplified', async (req, res) => {
         const columnTexts = columns.map(column => {
           let columnText = column.Field;
           
-          // Add type if available
+          // Add type and key info
+          const attributes = [];
+          
           if (column.Type) {
-            columnText += `(${column.Type}`;
-            
-            // Add key info if available
-            if (column.Key === 'PRI') {
-              columnText += ',PK';
-            } else if (column.Key === 'MUL') {
-              columnText += ',FK';
-            } else if (column.Key) {
-              columnText += `,${column.Key}`;
-            }
-            
-            columnText += ')';
+            attributes.push(column.Type);
+          }
+          
+          if (column.Key === 'PRI') {
+            attributes.push('PK');
+          } else if (column.Key === 'MUL') {
+            attributes.push('FK');
+          } else if (column.Key) {
+            attributes.push(column.Key);
+          }
+          
+          // Add relationship info
+          if (column.References && column.References.length > 0) {
+            column.References.forEach(ref => {
+              attributes.push(`REF=${ref.database}.${ref.table}.${ref.column}`);
+            });
+          }
+          
+          if (attributes.length > 0) {
+            columnText += `(${attributes.join(',')})`;
           }
           
           return columnText;
