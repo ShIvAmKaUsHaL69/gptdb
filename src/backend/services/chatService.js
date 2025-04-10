@@ -197,10 +197,15 @@ const processNaturalLanguageQuery = async (query, database = null) => {
       database // Pass the selected database to focus on
     );
     
-    // Check if the response is an error message
-    if (!sqlQuery.toLowerCase().startsWith('select') && 
-        !sqlQuery.toLowerCase().startsWith('show') &&
-        !sqlQuery.toLowerCase().startsWith('describe')) {
+    console.log('Generated SQL query:', sqlQuery);
+    
+    // Check if the response is an error message or SQL query
+    const sqlKeywords = ['select', 'show', 'describe', 'with', 'explain'];
+    const isSqlQuery = sqlKeywords.some(keyword => sqlQuery.toLowerCase().trim().startsWith(keyword)) || 
+                      sqlQuery.toLowerCase().includes('select ') || // For subqueries
+                      /^\s*\(\s*select/i.test(sqlQuery); // For queries starting with a subquery
+    
+    if (!isSqlQuery) {
       return {
         query: query,
         sql: null,

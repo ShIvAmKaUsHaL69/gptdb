@@ -106,7 +106,14 @@ const generateSQLFromNaturalLanguage = async (query, databaseSchema, selectedDB 
             Here is the database schema information:
             ${JSON.stringify(focusedSchema, null, 2)}
             
-            Generate only the SQL query without any explanations. If the query cannot be generated or is ambiguous, explain why.`
+            Important instructions:
+            1. Generate ONLY the SQL query without ANY explanations or comments.
+            2. Even if the query requires joins or subqueries to connect tables, still return ONLY the SQL.
+            3. Do not prefix your response with text like "SQL:" or similar.
+            4. If a query needs to find information based on a name or other identifier that requires joining tables, always produce a valid SQL query.
+            5. For complex queries involving multiple tables, use appropriate JOIN statements.
+            6. Do NOT return text explaining why you can't generate a query - if it's possible to write SQL for the request, write it.
+            7. Your response must begin with SQL keywords like SELECT, INSERT, UPDATE, etc.`
           },
           {
             role: "user",
@@ -151,7 +158,14 @@ const generateSQLFromNaturalLanguage = async (query, databaseSchema, selectedDB 
               Here is the minimal database schema information:
               ${JSON.stringify(minimalSchema, null, 2)}
               
-              Generate only the SQL query without any explanations. If the query cannot be generated or is ambiguous, explain why.`
+              Important instructions:
+              1. Generate ONLY the SQL query without ANY explanations or comments.
+              2. Even if the query requires joins or subqueries to connect tables, still return ONLY the SQL.
+              3. Do not prefix your response with text like "SQL:" or similar.
+              4. If a query needs to find information based on a name or other identifier that requires joining tables, always produce a valid SQL query.
+              5. For complex queries involving multiple tables, use appropriate JOIN statements.
+              6. Do NOT return text explaining why you can't generate a query - if it's possible to write SQL for the request, write it.
+              7. Your response must begin with SQL keywords like SELECT, INSERT, UPDATE, etc.`
             },
             {
               role: "user",
